@@ -2,13 +2,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define ADC_VIBRATION_PATH "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
-#define ADC_LIGHT_PATH "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
-#define BUZZER_GPIO_PATH "/sys/class/gpio/gpio68/value"  // Example GPIO path for the buzzer
+#define VIBRATION_SENSOR_ADC_PATH "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
+#define LIGHT_SENSOR_ADC_PATH "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
+#define BUZZER_GPIO_PATH "/sys/class/gpio/gpio68/value"
 
-#define VIBRATION_THRESHOLD 500
-#define LIGHT_THRESHOLD 150
+#define VIBRATION_THRESHOLD 3950  // Adjust based on actual vibration levels when dryer is running
+#define LIGHT_THRESHOLD 10        // Assuming closer to 0 means more light
 
 int read_adc(const char* adc_path) {
     int fd;
@@ -21,13 +22,14 @@ int read_adc(const char* adc_path) {
         return -1;
     }
 
-    if (read(fd, buf, sizeof(buf)) == -1) {
+    ssize_t count = read(fd, buf, sizeof(buf)-1);
+    if (count == -1) {
         perror("Error reading ADC value");
-        close(fd);
-        return -1;
+    } else {
+        buf[count] = '\0';
+        value = atoi(buf);
     }
 
-    value = atoi(buf);
     close(fd);
     return value;
 }
@@ -45,18 +47,23 @@ void write_gpio(const char* gpio_path, const char* value) {
 }
 
 int main() {
-    while (1) {
-        int vibration_value = read_adc(ADC_VIBRATION_PATH);
-        int light_value = read_adc(ADC_LIGHT_PATH);
+    printf("Starting the dryer alarm system...\n");
 
-        if (vibration_value < VIBRATION_THRESHOLD && light_value < LIGHT_THRESHOLD) {
-            write_gpio(BUZZER_GPIO_PATH, "1");  // Turn on the buzzer
-            printf("Dryer is running, and lights are on. Buzzer activated!\n");
+    while (1) {
+        int vibration_value = read_adc(VIBRATION_SENSOR_ADC_PATH);
+        int light_value = read_adc(LIGHT_SENSOR_ADC_PATH);
+
+        printf("Vibration Sensor Value: %d, Light Sensor Value: %d\n", vibration_value, light_value);
+
+        if (vibration_value > VIBRATION_THRESHOLD && light_value < LIGHT_THRESHOLD) {
+            write_gpio(BUZZER_GPIO_PATH, "1");  // Activate the buzzer
+            printf("Dryer is running and room is dark. Buzzer activated!\n");
         } else {
-            write_gpio(BUZZER_GPIO_PATH, "0");  // Turn off the buzzer
+            write_gpio(BUZZER_GPIO_PATH, "0");  // Deactivate the buzzer
+            printf("Buzzer deactivated.\n");
         }
 
-        usleep(100000);  // Delay for 100 milliseconds
+        usleep(500000);  // Delay for 500 milliseconds
     }
 
     return 0;
