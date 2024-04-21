@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #define VIBRATION_SENSOR_ADC_PATH "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
 #define LIGHT_SENSOR_ADC_PATH "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
@@ -10,13 +11,17 @@
 #define RED_LED_GPIO_PATH "/sys/class/gpio/gpio66/value"
 #define GREEN_LED_GPIO_PATH "/sys/class/gpio/gpio67/value"
 
-#define VIBRATION_THRESHOLD 3950  // Adjust based on actual vibration levels when dryer is running
-#define LIGHT_THRESHOLD 10        // Buzzer activates when light value is greater than 10
+#define VIBRATION_THRESHOLD 3250
+#define LIGHT_THRESHOLD 10
+
+volatile int vibration_value = 0;
+volatile int light_value = 0;
+pthread_mutex_t lock;
 
 int read_adc(const char* adc_path) {
     int fd;
     char buf[64];
-    int value;
+    int value = -1;
 
     fd = open(adc_path, O_RDONLY);
     if (fd < 0) {
@@ -24,11 +29,10 @@ int read_adc(const char* adc_path) {
         return -1;
     }
 
-    ssize_t count = read(fd, buf, sizeof(buf)-1);
+    ssize_t count = read(fd, buf, sizeof(buf) - 1);
     if (count == -1) {
         perror("Error reading ADC value");
         close(fd);
-        return -1;
     } else {
         buf[count] = '\0';
         value = atoi(buf);
@@ -50,52 +54,60 @@ void write_gpio(const char* gpio_path, const char* value) {
     close(fd);
 }
 
-void setup_gpio(const char* gpio_number, const char* gpio_path) {
-    int fd;
-    char path[50];
+void* sensor_reading_thread(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&lock);
+        vibration_value = read_adc(VIBRATION_SENSOR_ADC_PATH);
+        light_value = read_adc(LIGHT_SENSOR_ADC_PATH);
+        pthread_mutex_unlock(&lock);
+        usleep(100000); // 100 ms
+    }
+    return NULL;
+}
 
-    snprintf(path, sizeof(path), "/sys/class/gpio/gpio%s/direction", gpio_number);
-    fd = open(path, O_WRONLY);
-    if (fd < 0) {
-        perror("Failed to open GPIO direction for writing");
-        return;
+void* led_control_thread(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&lock);
+        if (vibration_value < VIBRATION_THRESHOLD) {
+            write_gpio(RED_LED_GPIO_PATH, "1");
+            write_gpio(GREEN_LED_GPIO_PATH, "0");
+        } else {
+            write_gpio(RED_LED_GPIO_PATH, "0");
+            write_gpio(GREEN_LED_GPIO_PATH, "1");
+        }
+        pthread_mutex_unlock(&lock);
+        usleep(100000); // 100 ms
     }
-    if (write(fd, "out", 3) != 3) {
-        perror("Error writing to GPIO direction");
+    return NULL;
+}
+
+void* buzzer_control_thread(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&lock);
+        if (vibration_value > VIBRATION_THRESHOLD && light_value > LIGHT_THRESHOLD) {
+            write_gpio(BUZZER_GPIO_PATH, "1");
+        } else {
+            write_gpio(BUZZER_GPIO_PATH, "0");
+        }
+        pthread_mutex_unlock(&lock);
+        usleep(100000); // 100 ms
     }
-    close(fd);
+    return NULL;
 }
 
 int main() {
     printf("Starting the dryer alarm system...\n");
+    pthread_t threads[3];
+    pthread_mutex_init(&lock, NULL);
 
-    while (1) {
-        int vibration_value = read_adc(VIBRATION_SENSOR_ADC_PATH);
-        int light_value = read_adc(LIGHT_SENSOR_ADC_PATH);
+    pthread_create(&threads[0], NULL, sensor_reading_thread, NULL);
+    pthread_create(&threads[1], NULL, led_control_thread, NULL);
+    pthread_create(&threads[2], NULL, buzzer_control_thread, NULL);
 
-        printf("Vibration Sensor Value: %d, Light Sensor Value: %d\n", vibration_value, light_value);
-
-        if (vibration_value > VIBRATION_THRESHOLD) {
-            write_gpio(RED_LED_GPIO_PATH, "1");    // Turn on the red LED
-            write_gpio(GREEN_LED_GPIO_PATH, "0"); // Turn off the green LED
-            printf("Dryer is running. Red LED on.\n");
-        } else {
-            write_gpio(RED_LED_GPIO_PATH, "0");   // Turn off the red LED
-            write_gpio(GREEN_LED_GPIO_PATH, "1"); // Turn on the green LED
-            printf("Dryer is done. Green LED on.\n");
-        }
-
-        // Buzzer logic based on light and vibration
-        if (vibration_value > VIBRATION_THRESHOLD && light_value > LIGHT_THRESHOLD) {
-            write_gpio(BUZZER_GPIO_PATH, "1");  // Activate the buzzer
-            printf("Conditions met: Buzzer activated!\n");
-        } else {
-            write_gpio(BUZZER_GPIO_PATH, "0");  // Deactivate the buzzer
-            printf("Conditions not met: Buzzer deactivated.\n");
-        }
-
-        usleep(500000);  // Delay for 500 milliseconds
+    for (int i = 0; i < 3; i++) {
+        pthread_join(threads[i], NULL);
     }
 
+    pthread_mutex_destroy(&lock);
     return 0;
 }
