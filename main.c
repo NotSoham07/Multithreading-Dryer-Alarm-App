@@ -96,6 +96,25 @@ void setup_gpio(const char* gpio_number) {
     close(fd);
 }
 
+void* email_notification_thread(void* arg) {
+    static int dryer_done_notified = 0;
+    while (1) {
+        pthread_mutex_lock(&lock);
+        if (vibration_value > VIBRATION_THRESHOLD && !dryer_done_notified) {
+            // Command to send an email notification
+            system("echo 'The dryer cycle is completed.' | mail -s 'Dryer Done Notification' notthesoham0711@gmail.com");
+            dryer_done_notified = 1; // Ensure the email is sent only once per dryer done event
+            printf("Email notification sent.\n");
+        } else if (vibration_value <= VIBRATION_THRESHOLD) {
+            // Reset the notification flag when the dryer starts running again
+            dryer_done_notified = 0;
+        }
+        pthread_mutex_unlock(&lock);
+        sleep(1); // Check every second
+    }
+    return NULL;
+}
+
 void* sensor_reading_thread(void* arg) {
     while (1) {
         pthread_mutex_lock(&lock);
@@ -145,14 +164,15 @@ void* buzzer_control_thread(void* arg) {
 
 int main() {
     printf("Starting the dryer alarm system...\n");
-    pthread_t threads[3];
+    pthread_t threads[4]; // Now managing four threads
     pthread_mutex_init(&lock, NULL);
 
     pthread_create(&threads[0], NULL, sensor_reading_thread, NULL);
     pthread_create(&threads[1], NULL, led_control_thread, NULL);
     pthread_create(&threads[2], NULL, buzzer_control_thread, NULL);
+    pthread_create(&threads[3], NULL, email_notification_thread, NULL); // New thread for email notifications
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         pthread_join(threads[i], NULL);
     }
 
