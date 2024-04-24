@@ -58,7 +58,7 @@ Configure postfix to send emails as previously detailed in the email setup instr
 - Create and edit the password file:
 - `sudo nano /etc/postfix/sasl_passwd`
 - Add the line: `[smtp.gmail.com]:587 your-email@gmail.com:your-password`
-- - Secure the password file and apply changes:
+- Secure the password file and apply changes:
 `sudo postmap /etc/postfix/sasl_passwd`
 - Restart the postfix:
 `sudo systemctl restart postfix`
