@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <time.h> 
 #include <string.h>
 #include <pthread.h>
 
@@ -97,17 +98,36 @@ void setup_gpio(const char* gpio_number) {
 }
 
 void* email_notification_thread(void* arg) {
-    static int dryer_done_notified = 0;
+    static int timer_running = 0;
+    static time_t start_time;
+    
     while (1) {
         pthread_mutex_lock(&lock);
-        if (vibration_value > VIBRATION_THRESHOLD && !dryer_done_notified) {
-            // Command to send an email notification
-            system("echo 'The dryer cycle is completed.' | mail -s 'Dryer Done Notification' notthesoham0711@gmail.com");
-            dryer_done_notified = 1; // Ensure the email is sent only once per dryer done event
-            printf("Email notification sent.\n");
-        } else if (vibration_value <= VIBRATION_THRESHOLD) {
-            // Reset the notification flag when the dryer starts running again
-            dryer_done_notified = 0;
+        if (vibration_value > VIBRATION_THRESHOLD) {
+            if (!timer_running) {
+                // Start the timer when the dryer is first detected as done
+                start_time = time(NULL);
+                timer_running = 1;
+                printf("Timer started for email notification.\n");
+            } else {
+                // Calculate time elapsed since the timer started
+                double elapsed = difftime(time(NULL), start_time);
+                if (elapsed >= 30) {
+                    // Send an email if the dryer is done for more than 30 seconds
+                    system("echo 'The dryer has been done for more than 30 seconds.' | mail -s 'Dryer Done Notification' notthesoham0711@gmail.com");
+                    printf("Email notification sent after dryer was done for 30 seconds.\n");
+                    timer_running = 0;  // Reset the timer to prevent repeated emails
+                } else {
+                    // Print how many seconds are left until the email is sent
+                    printf("Time until notification: %.0f seconds remaining.\n", 30 - elapsed);
+                }
+            }
+        } else {
+            // Reset the timer if the dryer is not done
+            if (timer_running) {
+                printf("Timer reset as dryer is no longer in 'done' state.\n");
+            }
+            timer_running = 0;
         }
         pthread_mutex_unlock(&lock);
         sleep(1); // Check every second
@@ -164,7 +184,7 @@ void* buzzer_control_thread(void* arg) {
 
 int main() {
     printf("Starting the dryer alarm system...\n");
-    pthread_t threads[4]; // Now managing four threads
+    pthread_t threads[4]; 
     pthread_mutex_init(&lock, NULL);
 
     pthread_create(&threads[0], NULL, sensor_reading_thread, NULL);
