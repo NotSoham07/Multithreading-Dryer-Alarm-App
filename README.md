@@ -48,12 +48,12 @@ This Dryer Alarm System is designed to monitor a clothes dryer using a BeagleBon
 Configure postfix to send emails as previously detailed in the email setup instructions:
 - Open Postfix configuration: `sudo nano /etc/postfix/main.cf`
 - Add or modify the following lines at the end of the file: 
-`relayhost = [smtp.gmail.com]:587
-smtp_use_tls = yes
-smtp_sasl_auth_enable = yes
-smtp_sasl_security_options = noanonymous
-smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
-smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt`
+`relayhost = [smtp.gmail.com]:587`
+`smtp_use_tls = yes`
+`smtp_sasl_auth_enable = yes`
+`smtp_sasl_security_options = noanonymous`
+`smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd`
+`smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt`
 
 - Create and edit the password file:
 - `sudo nano /etc/postfix/sasl_passwd`
