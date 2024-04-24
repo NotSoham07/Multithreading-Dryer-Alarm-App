@@ -1,4 +1,4 @@
-###Dryer Alarm System
+### Dryer Alarm System
 ##Overview
 This Dryer Alarm System is designed to monitor a clothes dryer using a BeagleBone Black (BBB). It detects whether the dryer is running based on vibration readings and monitors ambient light levels. The system uses this data to control LEDs, activate a buzzer under specific conditions, and send an email notification if the dryer remains in a "done" state for more than 30 seconds.
 Hardware Requirements
