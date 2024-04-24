@@ -49,8 +49,11 @@ Configure postfix to send emails as previously detailed in the email setup instr
 - Open Postfix configuration: `sudo nano /etc/postfix/main.cf`
 - Add or modify the following lines at the end of the file: 
 `relayhost = [smtp.gmail.com]:587`
+
 `smtp_use_tls = yes`
+
 `smtp_sasl_auth_enable = yes`
+
 `smtp_sasl_security_options = noanonymous`
 `smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd`
 `smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt`
